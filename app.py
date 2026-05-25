@@ -1,10 +1,15 @@
 import io
+import os
 import requests
 from flask import Flask, request
 from PIL import Image
 from twilio.twiml.messaging_response import MessagingResponse
 
 app = Flask(__name__)
+
+# Fetch secret credentials securely from the environment variables
+TWILIO_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
 
 def predict_crop_disease(image_bytes):
     """
@@ -37,17 +42,18 @@ def whatsapp_webhook():
         media_url = request.values.get('MediaUrl0')
         
         try:
-            # FIX: Send stream=True and use stream content to handle WhatsApp compression cleanly
-            img_response = requests.get(media_url, stream=True)
+            # FIX: Add HTTP Basic Authentication so Twilio allows the download
+            if TWILIO_SID and TWILIO_TOKEN:
+                img_response = requests.get(media_url, auth=(TWILIO_SID, TWILIO_TOKEN), stream=True)
+            else:
+                # Fallback if environment variables are missing
+                img_response = requests.get(media_url, stream=True)
+
             if img_response.status_code == 200:
                 image_bytes = io.BytesIO(img_response.content)
                 
-                # Open the image using PIL cleanly from the memory stream
                 with Image.open(image_bytes) as img:
-                    # Convert to RGB to neutralize any alpha-channel issues from phone screenshots
                     img = img.convert('RGB')
-                    
-                    # Execute your classification model function
                     ai_result = predict_crop_disease(image_bytes)
                     
                     reply = (
@@ -57,7 +63,7 @@ def whatsapp_webhook():
                         f"*Recommended Actions:*\n{ai_result['remedy']}"
                     )
             else:
-                reply = "❌ Could not download image from WhatsApp servers."
+                reply = f"❌ Could not download image. Twilio server responded with status: {img_response.status_code}"
         except Exception as e:
             reply = f"❌ Error processing image file: Unable to execute AI scan. ({str(e)})"
             
