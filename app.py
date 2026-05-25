@@ -8,8 +8,8 @@ from twilio.twiml.messaging_response import MessagingResponse
 app = Flask(__name__)
 
 # paste your actual twilio keys inside these quotes
-TWILIO_SID = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
-TWILIO_TOKEN = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+TWILIO_SID = "AC1ba26ca905ebb8520e4caa2c8a6aecfc" 
+TWILIO_TOKEN = "--------------------------------"
 
 def predict_crop_disease(image_bytes):
     """
