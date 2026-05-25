@@ -9,13 +9,7 @@ app = Flask(__name__)
 def predict_crop_disease(image_bytes):
     """
     Mock AI Model Pipeline.
-    This replaces your deep learning framework inference loop.
     """
-    # In production, you would run:
-    # model = load_model("banana_model.h5")
-    # prediction = model.predict(image_bytes)
-    
-    # Mocking a positive classification result for test verification
     return {
         "disease": "Yellow Sigatoka Leaf Spot",
         "confidence": 0.92,
@@ -27,47 +21,46 @@ def calculate_banana_fertilizer(age_in_days):
         return "Stage: Vegetative (Early).\nApply: 50g Urea, 50g SSP per plant."
     elif 30 < age_in_days <= 90:
         return "Stage: Vegetative (Peak).\nApply: 100g Urea, 100g MOP per plant."
+    elif 90 < age_in_days <= 180:
+        return "Stage: Shooting / Flowering.\nApply: 150g MOP, reduce Urea to 30g per plant.\nCheck closely for leaf spots."
     else:
-        return "Stage: Mature.\nFocus on high Potassium (MOP) inputs."
+        return "Stage: Fruit Development.\nFocus on high Potassium (MOP) inputs and steady water management."
 
 @app.route("/webhook", methods=['POST'])
 def whatsapp_webhook():
     response = MessagingResponse()
     msg = response.message()
     
-    # 1. Check if the incoming message contains an image/media attachment
     num_media = int(request.values.get('NumMedia', 0))
     
     if num_media > 0:
-        # Get the public direct URL of the uploaded image file hosted on Twilio's cloud
         media_url = request.values.get('MediaUrl0')
-        content_type = request.values.get('MediaContentType0', '')
         
-        # Verify the file is an image
-        if 'image' in content_type:
-            try:
-                # Download the image directly into server RAM safely using requests
-                img_response = requests.get(media_url)
+        try:
+            # FIX: Send stream=True and use stream content to handle WhatsApp compression cleanly
+            img_response = requests.get(media_url, stream=True)
+            if img_response.status_code == 200:
                 image_bytes = io.BytesIO(img_response.content)
                 
-                # Verify it can be read as a valid picture format
-                test_image = Image.open(image_bytes)
-                
-                # Execute your classification model function
-                ai_result = predict_crop_disease(image_bytes)
-                
-                reply = (
-                    f"⚠️ *AI Diagnosis Report* ⚠️\n\n"
-                    f"*Detected:* {ai_result['disease']}\n"
-                    f"*Confidence:* {ai_result['confidence'] * 100:.1f}%\n\n"
-                    f"*Recommended Actions:*\n{ai_result['remedy']}"
-                )
-            except Exception as e:
-                reply = f"❌ Error processing image file: Unable to execute AI scan. ({str(e)})"
-        else:
-            reply = "❌ Unsupported file type. Please send a clear, uncompressed leaf photo (.jpg/.png)."
+                # Open the image using PIL cleanly from the memory stream
+                with Image.open(image_bytes) as img:
+                    # Convert to RGB to neutralize any alpha-channel issues from phone screenshots
+                    img = img.convert('RGB')
+                    
+                    # Execute your classification model function
+                    ai_result = predict_crop_disease(image_bytes)
+                    
+                    reply = (
+                        f"⚠️ *AI Diagnosis Report* ⚠️\n\n"
+                        f"*Detected:* {ai_result['disease']}\n"
+                        f"*Confidence:* {ai_result['confidence'] * 100:.1f}%\n\n"
+                        f"*Recommended Actions:*\n{ai_result['remedy']}"
+                    )
+            else:
+                reply = "❌ Could not download image from WhatsApp servers."
+        except Exception as e:
+            reply = f"❌ Error processing image file: Unable to execute AI scan. ({str(e)})"
             
-    # 2. If it is standard text, fall back to the text-based workflow engine
     else:
         incoming_msg = request.values.get('Body', '').strip()
         if incoming_msg.lower() in ['hi', 'hello', 'start']:
@@ -77,7 +70,7 @@ def whatsapp_webhook():
                 age = int(incoming_msg)
                 reply = calculate_banana_fertilizer(age)
             except ValueError:
-                reply = "Send a crop age in days (e.g. '45') or upload an image of a crop leaf to process."
+                reply = "Send a crop age in days (e.g. '152') or upload an image of a crop leaf to process."
 
     msg.body(reply)
     return str(response)
