@@ -1,15 +1,15 @@
 import io
-import os
 import requests
 from flask import Flask, request
 from PIL import Image
+from requests.auth import HTTPBasicAuth
 from twilio.twiml.messaging_response import MessagingResponse
 
 app = Flask(__name__)
 
-# Fetch secret credentials securely from the environment variables
-TWILIO_SID = os.environ.get('TWILIO_ACCOUNT_SID')
-TWILIO_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+# paste your actual twilio keys inside these quotes
+TWILIO_SID = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+TWILIO_TOKEN = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 def predict_crop_disease(image_bytes):
     """
@@ -42,12 +42,12 @@ def whatsapp_webhook():
         media_url = request.values.get('MediaUrl0')
         
         try:
-            # FIX: Add HTTP Basic Authentication so Twilio allows the download
-            if TWILIO_SID and TWILIO_TOKEN:
-                img_response = requests.get(media_url, auth=(TWILIO_SID, TWILIO_TOKEN), stream=True)
-            else:
-                # Fallback if environment variables are missing
-                img_response = requests.get(media_url, stream=True)
+            # Explicit Basic Authentication Header matching Twilio requirement
+            img_response = requests.get(
+                media_url, 
+                auth=HTTPBasicAuth(TWILIO_SID, TWILIO_TOKEN), 
+                stream=True
+            )
 
             if img_response.status_code == 200:
                 image_bytes = io.BytesIO(img_response.content)
@@ -63,7 +63,7 @@ def whatsapp_webhook():
                         f"*Recommended Actions:*\n{ai_result['remedy']}"
                     )
             else:
-                reply = f"❌ Could not download image. Twilio server responded with status: {img_response.status_code}"
+                reply = f"❌ Authorization Error: Twilio returned status code {img_response.status_code}. Please check keys."
         except Exception as e:
             reply = f"❌ Error processing image file: Unable to execute AI scan. ({str(e)})"
             
